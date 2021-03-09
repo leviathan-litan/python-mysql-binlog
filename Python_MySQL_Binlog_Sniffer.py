@@ -5,7 +5,10 @@
 # 开始
 # ))))))))) 模块包导入
 # -- 基础模块
+# 时间
 import arrow
+import datetime
+# 数据
 import json
 
 # -- YAML
@@ -15,18 +18,23 @@ from ruamel import yaml
 import pymysql
 
 # -- MySQL Replication
-# from pymysqlreplication import BinLogStreamReader
-#
-# from pymysqlreplication.event import (
-#     QueryEvent,
-#     RotateEvent,
-#     FormatDescriptionEvent
-# )
-# from pymysqlreplication.row_event import (
-#     DeleteRowsEvent,
-#     UpdateRowsEvent,
-#     WriteRowsEvent
-# )
+# ------------------
+# import pymysqlreplication
+# from pymysqlreplication import *
+# ------------------
+from pymysqlreplication import BinLogStreamReader
+
+from pymysqlreplication.event import (
+    QueryEvent,
+    RotateEvent,
+    FormatDescriptionEvent
+)
+
+from pymysqlreplication.row_event import (
+    DeleteRowsEvent,
+    UpdateRowsEvent,
+    WriteRowsEvent
+)
 
 # ))))))))) YAML
 #  |--- 解析YAML文件
@@ -220,6 +228,21 @@ class class_yaml:
         with open(file=file_name, mode='w', encoding="utf-8") as write_f:
             yaml.dump(yaml_data_dict, write_f, Dumper=yaml.RoundTripDumper)
 
+# ))))))))) YAML
+#  |--- 时间类
+
+class class_arrow:
+
+    # 构造函数
+    def __init__(self):
+        pass
+
+    # 输出当前时间（以字符串的方式）
+    def now(self):
+
+        # 对象
+        obj_arrow_now = arrow.now().format("YYYY-MM-DD HH:mm:ss")
+
 # ))))))))) MySQL
 #  |--- 处理MySQL相关的操作
 
@@ -241,8 +264,8 @@ class class_mysql:
                     self.obj_mysql_conn = pymysql.connect(
                         host=mysql_connect_info['host'],
                         port=mysql_connect_info['port'],
-                        user=mysql_connect_info['user_name'],
-                        passwd=mysql_connect_info['user_passwd'],
+                        user=mysql_connect_info['user'],
+                        passwd=mysql_connect_info['passwd'],
                         charset='utf8',
                         cursorclass=pymysql.cursors.DictCursor
                     )
@@ -302,6 +325,102 @@ class class_mysql:
 
         return data_return,data_return_len
 
+# ))))))))) MySQL Replication
+#  |--- 处理MySQL复制架构相关的操作
+
+class class_mysql_replication:
+
+    # 构造函数
+    def __init__(self, mysql_connect_info={}):
+
+        # %%%%%% 对象 Arrow 时间
+        self.obj_arrow = class_arrow()
+
+        # %%%%%% 对象 MySQL
+        obj_mysql = class_mysql(
+            mysql_connect_info=connect_info_mysql
+        )
+
+        # %%%%%% 执行一个简单的查询
+        result_set, result_set_len = obj_mysql.mysql_sql_query(
+            sql="select @@server_id",
+            resultset_size="1"
+        )
+
+        self.mysql_server_id = result_set['@@server_id']
+
+        # print("MySQL server_id：【" + str(mysql_server_id) + "】")
+
+        # 对象：复制对象
+        self.obj_mysql_binlog_stream_reader = BinLogStreamReader(
+            resume_stream=False,
+            blocking=False,
+            only_events=[DeleteRowsEvent, WriteRowsEvent, UpdateRowsEvent],
+            only_schemas=['adamhuan'],
+            # only_tables=['people'],
+            # MySQL数据库连接信息
+            connection_settings=mysql_connect_info,
+            # MySQL server_id
+            server_id=self.mysql_server_id,
+            # MySQL数据库Binlog文件名
+            log_file="mysql-bin.000003",
+            # MySQL数据库Binlog文件位置
+            # log_pos=4
+        )
+
+    # 销毁函数
+    def __del__(self):
+
+        # 关闭流对象
+        self.obj_mysql_binlog_stream_reader.close()
+
+    # Binlog
+    def mysql_binlog(self):
+        # 变量
+        current_master_log_file = ""
+
+        # 处理
+        for binlogevent in self.obj_mysql_binlog_stream_reader:
+
+            # Pass
+            pass
+
+            for row in binlogevent.rows:
+                print("---------------------")
+                print("schema: %s, table: %s" % (binlogevent.schema, binlogevent.table))
+                event = {"schema": binlogevent.schema, "table": binlogevent.table}
+                # print(row)
+                if isinstance(binlogevent, DeleteRowsEvent):
+                    event["action"] = "delete"
+                    event["values"] = dict(row["values"].items())
+                    event = dict(event.items())
+                elif isinstance(binlogevent, UpdateRowsEvent):
+                    event["action"] = "update"
+                    event["before_values"] = dict(row["before_values"].items())
+                    event["after_values"] = dict(row["after_values"].items())
+                    event = dict(event.items())
+                elif isinstance(binlogevent, WriteRowsEvent):
+                    event["action"] = "insert"
+                    event["values"] = dict(row["values"].items())
+                    event = dict(event.items())
+                print(json.dumps(event))
+
+            # if isinstance(binlogevent, RotateEvent):
+            #     current_master_log_file = binlogevent.next_binlog
+            #     print("--------------------------------------")
+            #     print("---> MySQL Binlog / Next File：%s" % (current_master_log_file))
+            #
+            # if isinstance(binlogevent, QueryEvent):
+            #
+            #     if binlogevent.packet.server_id == self.mysql_server_id:
+            #         current_time = datetime.datetime.fromtimestamp(binlogevent.packet.timestamp)
+            #         start_binlog_file = current_master_log_file
+            #         start_binlog_pos = binlogevent.packet.log_pos
+            #
+            #         print("数据写入时间：%s" % (current_time))
+            #         print("Binlog 文件 / 开始：" + str(start_binlog_file))
+            #         print("Binlog Pos / 开始：" + str(start_binlog_pos))
+
 # ))))))))) 执行阶段
 
 # %%%%%% 对象 YAML
@@ -320,22 +439,29 @@ print("============ 数据库：连接信息")
 print(connect_info_mysql)
 
 # %%%%%% 对象 MySQL
-obj_mysql = class_mysql(
-        mysql_connect_info=connect_info_mysql
-)
+# obj_mysql = class_mysql(
+#         mysql_connect_info=connect_info_mysql
+# )
 
 # %%%%%% 执行一个简单的查询
-result_set,result_set_len = obj_mysql.mysql_sql_query(
-        sql="show databases",
-        resultset_size="*"
+# result_set,result_set_len = obj_mysql.mysql_sql_query(
+#         sql="select @@server_id",
+#         resultset_size="*"
+# )
+
+# print("@@@@@@@@@@@@@@@@@@@")
+# print("结果集总大小：" + str(result_set_len))
+# print("————————————")
+# print(result_set)
+
+# %%%%%% 运行阶段：1. 说明
+
+obj_mysql_repl = class_mysql_replication(
+    mysql_connect_info=connect_info_mysql
 )
 
 print("@@@@@@@@@@@@@@@@@@@")
-print("结果集总大小：" + str(result_set_len))
-print("————————————")
-print(result_set)
-
-# %%%%%% 运行阶段：1. 说明
+obj_mysql_repl.mysql_binlog()
 
 # %%%%%% 运行阶段：2. 说明
 

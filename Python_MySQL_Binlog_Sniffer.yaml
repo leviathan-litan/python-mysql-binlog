@@ -12,23 +12,33 @@ meta:
 # ------------------- 相关配置：MySQL
 mysql:
   # 源端 / 要解析的目标
+  # 通用数据库连接类的连接字符串
   source:
+    # 字符集
+    charset: 'utf8'
     # 主机名或IP
     host: "192.168.232.11"
     # 端口
     port: 3306
     # 用户名
-    user_name: "mysql_admin"
+    user: "root"
     # 密码
-    user_passwd: "oracle"
+    passwd: "oracle"
+  # 误操作信息
+  incorrect_operation:
     # 库
     db_name: "adamhuan"
     # 表
     table_name: "people"
     # 误操作类型
-    # -- create
     # -- delete
     # -- update
+    # -- drop / 只能从全备份恢复,精确恢复工具不支持
+    sql_type: "update"
+    # 误操作开始时间
+    datetime_begin: ""
+    # 误操作结束时间
+    datetime_end: ""
 
 # =====================
 # 结束
