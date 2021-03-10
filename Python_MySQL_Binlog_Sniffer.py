@@ -92,7 +92,7 @@ class class_linux:
     # new   / 更新
     # inner / 时间段内
     # out / 时间段外
-    def find_file_in_directory_by_time(self, directory_path, datetime_begin, datetime_end="", range="", counts="*"):
+    def find_file_in_directory_by_time(self, directory_path, datetime_begin, datetime_end="", time_range="", counts="*"):
 
         # 变量
         # 最终结果
@@ -120,66 +120,66 @@ class class_linux:
         print(os_command_result)
         print("#################################")
 
-        item_begin_matched_times = 0
-        item_end_matched_times = 0
+        # 捕获到满足条件的项的次数
+        item_matched_counts_begin = 0
+        item_matched_counts_end = 0
 
-        for_loop = 0
-        for result_item in os_command_result:
-            # 变量
-            result_item_name = result_item.split()[2]
-            result_item_time = result_item.split()[0] + " " + result_item.split()[1]
+        if datetime_end == "":
+            # 时间点
+            for_loop_time_in_point = 0
+            for result_item in os_command_result:
+                # 显示
+                print("=========================== %s" % (for_loop_time_in_point))
+                print(result_item)
 
-            print("%%%%%%%%%%%")
+                # 变量
+                result_item_name = result_item.split()[2]
+                result_item_time = result_item.split()[0] + " " + result_item.split()[1]
+                item_is_matched = obj_time.is_target_time_newer(
+                    time_target=result_item_time,
+                    time_compare=datetime_begin
+                )
+                print("是否匹配到了：%s" % (item_is_matched))
+                print("--------------")
 
-            print("@@@@@ --->> 名称：%s" % (result_item_name))
-            print("@@@@@ --->> 时间：%s" % (result_item_time))
+                if item_is_matched:
+                    if item_matched_counts_begin == 0:
+                        for computer_value in range(int(counts)):
+                            current_cursor = False
+                            computer_cursor_value = computer_value + 1
 
-            # 只是查找某个时间点前后的
-            if datetime_begin != "" and datetime_end == "":
-                if item_begin_matched_times == 0:
-                    if obj_time.is_target_time_newer(
-                        time_target=result_item_time,
-                        time_compare=datetime_begin
-                    ):
-                        if range == "old":
-                            # 当前位标 做减法
-                            for counts_item in range(counts):
-                                current_cursor = for_loop - (counts_item + 1)
-                            pass
-                        elif range == "new":
-                            # 当前位标 做加法
-                            for counts_item in range(counts):
-                                current_cursor = for_loop + (counts_item + 1)
-                                current_item_os_command_result = os_command_result[current_cursor]
-                                search_result_list_file.append(current_item_os_command_result)
+                            if time_range == "old":
+                                current_cursor = for_loop_time_in_point - computer_cursor_value
 
-                        # 自增
-                        item_begin_matched_times += 1
+                            elif time_range == "new":
+                                current_cursor = for_loop_time_in_point + computer_cursor_value
 
-            # 查找时间段的，默认时间段之内的
-            if datetime_begin != "" and datetime_end != "":
-                if item_end_matched_times == 0:
-                    if obj_time.is_target_time_newer(
-                        time_target=result_item_time,
-                        time_compare=datetime_end
-                    ):
-                        if range == "inner":
-                            # 当前位标 起点 做加法 终点做减法
-                            # 针对MySQL Binlog，取值范围做调整：
-                            # 起点加1 一直到 终点加1
-                            pass
-                        elif range == "out":
-                            # 当前位标 起点 做减法 终点做加法
-                            pass
+                            current_item = os_command_result[current_cursor]
 
-                        # 自增
-                        item_end_matched_times += 1
+                            if current_item not in search_result_list_file:
+                                search_result_list_file.append(current_item)
 
-            # 自增
-            for_loop += 1
+                            # 显示
+                            print("###---->")
+                            print("游标值：%s" % (current_cursor))
+                            print("当前项：%s" % (current_item))
 
-        # 显示最终返回值
+                    # 自增
+                    item_matched_counts_begin += 1
+
+                # 自增
+                for_loop_time_in_point += 1
+
+        else:
+            # 时间段
+            pass
+
+        # 返回阶段
+        # -- 显示
         print("返回值：%s" % (search_result_list_file))
+
+        # -- 返回
+        return search_result_list_file
 
 # ))))))))) YAML
 #  |--- 解析YAML文件
@@ -576,6 +576,7 @@ print("@@@@@@@@@@@@@@@@@@@")
 obj_linux.find_file_in_directory_by_time(
     directory_path="/var/log",
     datetime_begin="2021-02-25 03:00:01",
+    time_range="new",
     counts=1
 )
 
