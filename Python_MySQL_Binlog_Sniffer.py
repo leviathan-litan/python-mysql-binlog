@@ -87,7 +87,12 @@ class class_linux:
     # 时间段：默认：全部
     # 时间点：默认：1
     # 这里的时间段的选择和通常的选择有所差别，是为了适应MySQL Binlog的场景而做的改动
-    def find_file_in_directory_by_time(self, directory_path, datetime_begin, datetime_end=False, older_newer=False, counts="*"):
+    # range:
+    # old   / 更旧
+    # new   / 更新
+    # inner / 时间段内
+    # out / 时间段外
+    def find_file_in_directory_by_time(self, directory_path, datetime_begin, datetime_end="", range="", counts="*"):
 
         # 变量
         # 最终结果
@@ -114,7 +119,11 @@ class class_linux:
         print("############# 结果集 #############")
         print(os_command_result)
         print("#################################")
-        
+
+        item_begin_matched_times = 0
+        item_end_matched_times = 0
+
+        for_loop = 0
         for result_item in os_command_result:
             # 变量
             result_item_name = result_item.split()[2]
@@ -125,23 +134,52 @@ class class_linux:
             print("@@@@@ --->> 名称：%s" % (result_item_name))
             print("@@@@@ --->> 时间：%s" % (result_item_time))
 
-            if datetime_begin != "":
-                while_loop_first_file = 0
-                while not obj_time.is_target_time_newer(
-                    time_target=result_item_time,
-                    time_compare=datetime_begin
-                ):
-                    # 自增
-                    while_loop_first_file += 1
+            # 只是查找某个时间点前后的
+            if datetime_begin != "" and datetime_end == "":
+                if item_begin_matched_times == 0:
+                    if obj_time.is_target_time_newer(
+                        time_target=result_item_time,
+                        time_compare=datetime_begin
+                    ):
+                        if range == "old":
+                            # 当前位标 做减法
+                            for counts_item in range(counts):
+                                current_cursor = for_loop - (counts_item + 1)
+                            pass
+                        elif range == "new":
+                            # 当前位标 做加法
+                            for counts_item in range(counts):
+                                current_cursor = for_loop + (counts_item + 1)
+                                current_item_os_command_result = os_command_result[current_cursor]
+                                search_result_list_file.append(current_item_os_command_result)
 
-            if datetime_end != "":
-                while_loop_last_file = 0
-                while not obj_time.is_target_time_newer(
-                    time_target=result_item_time,
-                    time_compare=datetime_end
-                ):
-                    # 自增
-                    while_loop_last_file += 1
+                        # 自增
+                        item_begin_matched_times += 1
+
+            # 查找时间段的，默认时间段之内的
+            if datetime_begin != "" and datetime_end != "":
+                if item_end_matched_times == 0:
+                    if obj_time.is_target_time_newer(
+                        time_target=result_item_time,
+                        time_compare=datetime_end
+                    ):
+                        if range == "inner":
+                            # 当前位标 起点 做加法 终点做减法
+                            # 针对MySQL Binlog，取值范围做调整：
+                            # 起点加1 一直到 终点加1
+                            pass
+                        elif range == "out":
+                            # 当前位标 起点 做减法 终点做加法
+                            pass
+
+                        # 自增
+                        item_end_matched_times += 1
+
+            # 自增
+            for_loop += 1
+
+        # 显示最终返回值
+        print("返回值：%s" % (search_result_list_file))
 
 # ))))))))) YAML
 #  |--- 解析YAML文件
@@ -529,10 +567,16 @@ obj_mysql_repl = class_mysql_replication(
 print("@@@@@@@@@@@@@@@@@@@")
 # obj_mysql_repl.mysql_binlog()
 
+# obj_linux.find_file_in_directory_by_time(
+#     directory_path="/var/log",
+#     datetime_begin="2021-02-25 03:00:01",
+#     datetime_end="2021-03-02 04:00:00"
+# )
+
 obj_linux.find_file_in_directory_by_time(
     directory_path="/var/log",
     datetime_begin="2021-02-25 03:00:01",
-    datetime_end="2021-03-02 04:00:00"
+    counts=1
 )
 
 # ========================================
