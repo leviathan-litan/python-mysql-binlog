@@ -5,6 +5,9 @@
 # 开始
 # ))))))))) 模块包导入
 # -- 基础模块
+# 操作系统
+import os
+import sys
 # 时间
 import arrow
 import datetime
@@ -22,22 +25,127 @@ import pymysql
 # import pymysqlreplication
 # from pymysqlreplication import *
 # ------------------
-from pymysqlreplication import BinLogStreamReader
+# from pymysqlreplication import BinLogStreamReader
+#
+# from pymysqlreplication.event import (
+#     QueryEvent,
+#     RotateEvent,
+#     FormatDescriptionEvent
+# )
+#
+# from pymysqlreplication.row_event import (
+#     DeleteRowsEvent,
+#     UpdateRowsEvent,
+#     WriteRowsEvent
+# )
 
-from pymysqlreplication.event import (
-    QueryEvent,
-    RotateEvent,
-    FormatDescriptionEvent
-)
+# ))))))))) OS
+#  |--- 操作系统层面的相关操作
 
-from pymysqlreplication.row_event import (
-    DeleteRowsEvent,
-    UpdateRowsEvent,
-    WriteRowsEvent
-)
+class class_linux:
+
+    # 构造函数
+    def __init__(self):
+        pass
+
+    # 执行操作系统命令 / 本机
+    # 输出：
+    # 按行排列的结果
+    # 一共有多少行
+    def execute_os_command_local(self, os_command):
+
+        # 变量
+        data_return = []
+        data_return_len = 0
+
+        # 显示
+        print("将执行的命令：%s" % (os_command))
+
+        # 处理
+        os_command_result = os.popen(os_command).read().splitlines()
+        # os_command_result_size = len(os_command_result)
+
+        for line in os_command_result:
+            # 过滤：空行
+            if line.strip() != "":
+                data_return.append(line)
+
+        # 最后，获取一下结果集的大小
+        data_return_len = len(data_return)
+
+        # 输出
+        return data_return, data_return_len
+
+    # 执行操作系统命令 / 远程
+    def execute_os_command_remote(self, os_command):
+        pass
+
+    # 查找文件 / 在指定目录中，根据时间点查找文件
+    # 以指定时间点分隔更早的若干个文件 或 以指定时间点分隔更新的若干个文件 或 指定时间段内的若干文件
+    # 在时间点选择的时候，才需要启用参数：older_newer / 时间段的时候，不需要
+    # counts：
+    # 时间段：默认：全部
+    # 时间点：默认：1
+    # 这里的时间段的选择和通常的选择有所差别，是为了适应MySQL Binlog的场景而做的改动
+    def find_file_in_directory_by_time(self, directory_path, datetime_begin, datetime_end=False, older_newer=False, counts="*"):
+
+        # 变量
+        # 最终结果
+        search_result_list_file = []
+
+        # 操作系统命令
+        os_command = "ls -ltr --time-style='+%Y-%m-%d %H:%M:%S' " + directory_path + " | awk '{print $6\" \"$7\" \"$8}'"
+
+        # 显示
+        # print("目录：%s" % (directory_path))
+        # print("开始时间：%s" % (datetime_begin))
+        # print("结束时间：%s" % (datetime_end))
+        # print("更旧 / 更新：%s" % (older_newer))
+        # print("数量：%s" % (counts))
+        # print("-----------------------")
+        # print("命令：%s" % (os_command))
+
+        # 执行命令
+        os_command_result, os_command_result_len = obj_linux.execute_os_command_local(
+            os_command=os_command
+        )
+        print("=================================")
+        print("结果集长度：%s" % (os_command_result_len))
+        print("############# 结果集 #############")
+        print(os_command_result)
+        print("#################################")
+        
+        for result_item in os_command_result:
+            # 变量
+            result_item_name = result_item.split()[2]
+            result_item_time = result_item.split()[0] + " " + result_item.split()[1]
+
+            print("%%%%%%%%%%%")
+
+            print("@@@@@ --->> 名称：%s" % (result_item_name))
+            print("@@@@@ --->> 时间：%s" % (result_item_time))
+
+            if datetime_begin != "":
+                while_loop_first_file = 0
+                while not obj_time.is_target_time_newer(
+                    time_target=result_item_time,
+                    time_compare=datetime_begin
+                ):
+                    # 自增
+                    while_loop_first_file += 1
+
+            if datetime_end != "":
+                while_loop_last_file = 0
+                while not obj_time.is_target_time_newer(
+                    time_target=result_item_time,
+                    time_compare=datetime_end
+                ):
+                    # 自增
+                    while_loop_last_file += 1
 
 # ))))))))) YAML
 #  |--- 解析YAML文件
+
 class class_yaml:
 
     def __init__(self):
@@ -228,10 +336,10 @@ class class_yaml:
         with open(file=file_name, mode='w', encoding="utf-8") as write_f:
             yaml.dump(yaml_data_dict, write_f, Dumper=yaml.RoundTripDumper)
 
-# ))))))))) YAML
+# ))))))))) Time
 #  |--- 时间类
 
-class class_arrow:
+class class_time:
 
     # 构造函数
     def __init__(self):
@@ -242,6 +350,25 @@ class class_arrow:
 
         # 对象
         obj_arrow_now = arrow.now().format("YYYY-MM-DD HH:mm:ss")
+
+    # 时间比较
+    # -- 目标时间 / 最后反馈的时间，是目标时间的新旧
+    # -- 比较时间 / 参与比较运算的时间
+    def is_target_time_newer(self, time_target, time_compare, fmt="%Y-%m-%d %H:%M:%S"):
+
+        # 变量
+        datetime_target = datetime.datetime.strptime(str(time_target), fmt)
+        datetime_compare = datetime.datetime.strptime(str(time_compare), fmt)
+
+        # 返回值
+        data_return = False
+
+        # 处理
+        # 如果目标时间大于比较时间，则说明目标时间更新
+        data_return = datetime_target > datetime_compare
+
+        # 返回阶段
+        return data_return
 
 # ))))))))) MySQL
 #  |--- 处理MySQL相关的操作
@@ -333,98 +460,55 @@ class class_mysql_replication:
     # 构造函数
     def __init__(self, mysql_connect_info={}):
 
-        # %%%%%% 对象 Arrow 时间
-        self.obj_arrow = class_arrow()
-
-        # %%%%%% 对象 MySQL
-        obj_mysql = class_mysql(
-            mysql_connect_info=connect_info_mysql
+        # %%%%%% 获取 directory binlog
+        yaml_directory_binlog = obj_yaml.yaml_param_get_value(
+            yaml_file=file_yaml,
+            key_path="mysql/directory/binlog",
+            split_with="/"
         )
 
-        # %%%%%% 执行一个简单的查询
-        result_set, result_set_len = obj_mysql.mysql_sql_query(
-            sql="select @@server_id",
-            resultset_size="1"
+        # %%%%%% 获取 db_name
+        name_schema = obj_yaml.yaml_param_get_value(
+            yaml_file=file_yaml,
+            key_path="mysql/incorrect_operation/db_name",
+            split_with="/"
+        )
+        # %%%%%% 获取 table_name
+        name_table = obj_yaml.yaml_param_get_value(
+            yaml_file=file_yaml,
+            key_path="mysql/incorrect_operation/table_name",
+            split_with="/"
+        )
+        # %%%%%% 获取 sql_type
+        yaml_sql_type = obj_yaml.yaml_param_get_value(
+            yaml_file=file_yaml,
+            key_path="mysql/incorrect_operation/sql_type",
+            split_with="/"
         )
 
-        self.mysql_server_id = result_set['@@server_id']
-
-        # print("MySQL server_id：【" + str(mysql_server_id) + "】")
-
-        # 对象：复制对象
-        self.obj_mysql_binlog_stream_reader = BinLogStreamReader(
-            resume_stream=False,
-            blocking=False,
-            only_events=[DeleteRowsEvent, WriteRowsEvent, UpdateRowsEvent],
-            only_schemas=['adamhuan'],
-            # only_tables=['people'],
-            # MySQL数据库连接信息
-            connection_settings=mysql_connect_info,
-            # MySQL server_id
-            server_id=self.mysql_server_id,
-            # MySQL数据库Binlog文件名
-            log_file="mysql-bin.000003",
-            # MySQL数据库Binlog文件位置
-            # log_pos=4
+        # %%%%%% 获取 datetime_begin
+        yaml_datetime_begin = obj_yaml.yaml_param_get_value(
+            yaml_file=file_yaml,
+            key_path="mysql/incorrect_operation/datetime_begin",
+            split_with="/"
         )
-
-    # 销毁函数
-    def __del__(self):
-
-        # 关闭流对象
-        self.obj_mysql_binlog_stream_reader.close()
-
-    # Binlog
-    def mysql_binlog(self):
-        # 变量
-        current_master_log_file = ""
-
-        # 处理
-        for binlogevent in self.obj_mysql_binlog_stream_reader:
-
-            # Pass
-            pass
-
-            for row in binlogevent.rows:
-                print("---------------------")
-                print("schema: %s, table: %s" % (binlogevent.schema, binlogevent.table))
-                event = {"schema": binlogevent.schema, "table": binlogevent.table}
-                # print(row)
-                if isinstance(binlogevent, DeleteRowsEvent):
-                    event["action"] = "delete"
-                    event["values"] = dict(row["values"].items())
-                    event = dict(event.items())
-                elif isinstance(binlogevent, UpdateRowsEvent):
-                    event["action"] = "update"
-                    event["before_values"] = dict(row["before_values"].items())
-                    event["after_values"] = dict(row["after_values"].items())
-                    event = dict(event.items())
-                elif isinstance(binlogevent, WriteRowsEvent):
-                    event["action"] = "insert"
-                    event["values"] = dict(row["values"].items())
-                    event = dict(event.items())
-                print(json.dumps(event))
-
-            # if isinstance(binlogevent, RotateEvent):
-            #     current_master_log_file = binlogevent.next_binlog
-            #     print("--------------------------------------")
-            #     print("---> MySQL Binlog / Next File：%s" % (current_master_log_file))
-            #
-            # if isinstance(binlogevent, QueryEvent):
-            #
-            #     if binlogevent.packet.server_id == self.mysql_server_id:
-            #         current_time = datetime.datetime.fromtimestamp(binlogevent.packet.timestamp)
-            #         start_binlog_file = current_master_log_file
-            #         start_binlog_pos = binlogevent.packet.log_pos
-            #
-            #         print("数据写入时间：%s" % (current_time))
-            #         print("Binlog 文件 / 开始：" + str(start_binlog_file))
-            #         print("Binlog Pos / 开始：" + str(start_binlog_pos))
+        # %%%%%% 获取 datetime_end
+        yaml_datetime_end = obj_yaml.yaml_param_get_value(
+            yaml_file=file_yaml,
+            key_path="mysql/incorrect_operation/datetime_end",
+            split_with="/"
+        )
 
 # ))))))))) 执行阶段
 
 # %%%%%% 对象 YAML
 obj_yaml = class_yaml()
+
+# %%%%%% 对象 OS
+obj_linux = class_linux()
+
+# %%%%%% 对象 时间
+obj_time = class_time()
 
 # %%%%%% 变量
 file_yaml = "Python_MySQL_Binlog_Sniffer.yaml"
@@ -435,35 +519,21 @@ connect_info_mysql = obj_yaml.yaml_param_get_value(
     split_with="/"
 )
 
-print("============ 数据库：连接信息")
-print(connect_info_mysql)
-
-# %%%%%% 对象 MySQL
-# obj_mysql = class_mysql(
-#         mysql_connect_info=connect_info_mysql
-# )
-
-# %%%%%% 执行一个简单的查询
-# result_set,result_set_len = obj_mysql.mysql_sql_query(
-#         sql="select @@server_id",
-#         resultset_size="*"
-# )
-
-# print("@@@@@@@@@@@@@@@@@@@")
-# print("结果集总大小：" + str(result_set_len))
-# print("————————————")
-# print(result_set)
-
-# %%%%%% 运行阶段：1. 说明
-
+# %%%%%% 对象 MySQL Replication
 obj_mysql_repl = class_mysql_replication(
     mysql_connect_info=connect_info_mysql
 )
 
-print("@@@@@@@@@@@@@@@@@@@")
-obj_mysql_repl.mysql_binlog()
+# %%%%%% 处理
 
-# %%%%%% 运行阶段：2. 说明
+print("@@@@@@@@@@@@@@@@@@@")
+# obj_mysql_repl.mysql_binlog()
+
+obj_linux.find_file_in_directory_by_time(
+    directory_path="/var/log",
+    datetime_begin="2021-02-25 03:00:01",
+    datetime_end="2021-03-02 04:00:00"
+)
 
 # ========================================
 # 结束
